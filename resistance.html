@@ -1,0 +1,694 @@
+<html>
+<head>
+	<meta charset="utf-8" />
+	<link href='http://fonts.googleapis.com/css?family=Orbitron:400,700' rel='stylesheet' type='text/css'>
+	<script src="http://cdn.peerjs.com/0.3/peer.js"></script>
+	<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+	<style type="text/css">
+	
+	body {
+		display: flex;
+		flex-direction: column;
+		background-color: #9DA0A1;
+		font-family: 'Orbitron';
+	}
+	
+	section {
+		flex: 1;
+		display: flex;
+		min-height: 100px;
+		justify-content: center;
+		margin: 12px;
+	}
+	
+	#header {
+		flex: 1;
+		font-size: 36pt;
+	}
+	
+	#game_status {
+		flex: 1;
+		min-height: 50px;
+		font-size: 24pt;
+		margin: 24px;
+	}
+	
+	#game_status > * {
+		margin: 6px;
+	}
+	
+	#mission_area {
+		flex: 2;
+		flex-direction: column;
+		align-self: center;
+	}
+	
+	#mission_list {
+		flex-direction: row;
+		flex-wrap: nowrap;
+		border: solid 2px black;
+		box-shadow: 4px 4px;
+		width: 800px;
+	}
+	
+	.mission {
+		display: flex;
+		flex-direction: row;
+	}
+	
+	.mission div {
+		display: flex;
+		flex-direction: column;
+	}
+	
+	#player_area {
+		flex: 3;
+		flex-flow: row wrap;
+		justify-content: space-between;
+	}
+	
+	#player_list {
+		flex: 1;
+		flex-direction: column;
+		align-content: right;
+		align-self: flex-start;
+		max-width: 500px;
+		min-width: 100px;
+	}
+	
+	#players {
+		display: flex;
+		flex-direction: column;
+		border: solid 2px black;
+		box-shadow: 4px 4px;
+	}
+	
+	.player {
+		margin: 5px;
+		display: inline-block;
+	    cursor: move;
+	    cursor: grab;
+	    cursor: -moz-grab;
+	    cursor: -webkit-grab;
+		z-index: 0;
+	}
+	
+	.dragging {
+		position: absolute;
+	    cursor: grabbing;
+	    cursor: -moz-grabbing;
+	    cursor: -webkit-grabbing;
+		border: solid 2px black;
+		box-shadow: 12px 12px;
+		padding: 4px;
+		background-color: #9DA0A1;
+		z-index: 100;
+	}
+	
+	#chat_area {
+		flex: 2;
+		flex-direction: column;
+		align-self: flex-start;
+		min-width: 500px;
+		max-width: 500px;
+	}
+	
+	#messages {
+		display: flex;
+		flex-direction: column;
+		border: solid 2px black;
+		box-shadow: 4px 4px;
+		min-height: 300px;
+	}
+	
+	.message {
+		margin: 2px;
+	}
+	
+	.message_input {
+		border: solid 2px black;
+		box-shadow: 2px 2px;
+		
+		margin: 12px;
+		min-height: 20px;
+		min-width: 300px;
+	}
+	
+	.message_input:focus {
+		box-shadow: 6px 6px;
+		transform: translate(-2px, -2px);
+		outline: none;
+	}
+	
+	.name {
+		font-weight: bold;
+		white-space: nowrap;
+	}
+	
+	#reminder_area {
+		flex: 0.2;
+		flex-direction: column;
+		align-items: flex-end;
+	}
+	
+	.title {
+		font-weight: bold;
+		margin: 6px;
+	}
+	
+	.submit-btn {
+		cursor: pointer;
+		border: solid 2px black;
+		border-radius: 6px;
+	}
+	
+	.active_team {
+		min-width: 100px;
+	}
+	</style>
+</head>
+<body>
+	
+	<section id="header">
+		<span>THE RESISTANCE</span>
+	</section>
+	
+	<section id="mission_area">
+		<div class="title">Missions:</div>
+		<section id="mission_list">
+			<div class="mission">
+				<svg width="150px" height="150px" viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg">
+					<circle cx="60" cy="60" r="50" fill="#3498DB"/>
+					<text x="60" y="88" font-size="75" text-anchor="middle" fill="#ECF0F1">2</text>
+				</svg>
+			</div>
+			<div class="mission">
+				<svg width="150px" height="150px" viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg">
+					<circle cx="60" cy="60" r="50" fill="#E74C3C"/>
+					<text x="60" y="88" font-size="75" text-anchor="middle" fill="#ECF0F1">3</text>
+				</svg>
+			</div>
+			<div class="mission active_mission">
+				<svg width="150px" height="150px" viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg">
+					<circle cx="60" cy="60" r="50"/>
+					<text x="60" y="88" font-size="75" text-anchor="middle" fill="#ECF0F1">2</text>
+				</svg>
+				<div class="active_team">
+				</div>
+			</div>
+			<div class="mission">
+				<svg width="150px" height="150px" viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg">
+					<circle cx="60" cy="60" r="50"/>
+					<text x="60" y="88" font-size="75" text-anchor="middle" fill="#ECF0F1">3</text>
+				</svg>
+			</div>
+			<div class="mission">
+				<svg width="150px" height="150px" viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg">
+					<circle cx="60" cy="60" r="50"/>
+					<text x="60" y="88" font-size="75" text-anchor="middle" fill="#ECF0F1">3</text>
+				</svg>
+			</div>
+		</section>
+	</section>
+	
+	<section id="game_status">
+		The Leader is choosing a team.
+	</section>
+	
+	<section id="player_area">
+		<section id="chat_area">
+			<div class="title">Public Chat:</div>
+			<div id="messages">
+			</div>
+			<div class="message_input" contenteditable></div>
+		</section>
+		
+		<section id="player_list">
+			<div class="title">Players:</div>
+			<div id="players">
+			</div>
+		</section>
+	</section>
+	
+	<section id="reminder_area">
+		<span>Reconnect url: <span id="reconnect">etc</span></span>
+		<span>The Resistance is (c) 2012 Lone Oak Games, Inc. This website is in no way affiliated with them. 
+			Buy their games: <a href="http://www.indieboardsandcards.com" target="_blank">www.indieboardsandcards.com</a>.
+			The game is way more fun irl.</span>
+	</section>
+	
+<script>
+	var d3 = d3;
+	var yes = "👍";
+	var no = "👎";
+	var num_players = 5;
+	var current_mission = 0;
+	var current_leader = 0;
+	var succeeded_missions = 0;
+	var failed_missions = 0;
+	var failed_votes = 0
+	var team_wins = 0;
+	
+	var teams = {
+		5:[3,2],
+		6:[4,2],
+		7:[4,3],
+		8:[5,3],
+		9:[6,3],
+		10:[6,4]
+	};
+	var team_size = {
+		5:[2,3,2,3,3],
+		6:[2,3,4,3,4],
+		7:[2,3,3,4,4],
+		8:[3,4,4,5,5],
+		9:[3,4,4,5,5],
+		10:[3,4,4,5,5]
+	};
+	var intro_text = [
+		"Everyone close yr eyes",
+		"Spies, open yr eyes. Spies look around and make sure that you know all the other spies.",
+		"Spies, close yr eyes. Everyone's eyes should be closed.",
+		"Everyone open yr eyes."
+	];
+	var good_team_name = "Resistance";
+	var good_team_sym = "👊";
+	var bad_team_name = "Spies";
+	var bad_team_sym = "🎭";
+	
+	var game_order = [
+		enter_name, // textbox
+		init_conn, // lobby, ready up, min five
+		game_setup, // you are this player, these are your team mates, initialize variables, choose starting player
+		play_game, // loop turns until win condition
+		game_end // display winners
+	];
+	var turn_phases = {
+		"leader_select_team": {
+			func: leader_select_team,
+			next: "players_vote_team"
+		},
+		"players_vote_team": {
+			func: players_vote_team,
+			success: "players_vote_mission",
+			fail: "switch_leader"
+		},
+		"players_vote_mission": {
+			func: players_vote_mission,
+			success: "mission_pass",
+			fail: "mission_fail"
+		},
+		"mission_pass": {
+			func: mission_pass,
+			next: "switch_mission"
+		},
+		"mission_fail": {
+			func: mission_fail,
+			next: "switch_leader"
+		},
+		"switch_mission": {
+			func: switch_mission,
+			next: "switch_leader"
+		},
+		"switch_leader": {
+			func: switch_leader,
+			next: "leader_select_team"
+		}
+	};
+	
+	var local_name = "Objelisks" + Math.floor(Math.random()*50);
+	var local_player = {"x":0, "y":0, "name":local_name, "ready":false, "order":0, "conn":null};
+	var player_order = [];
+	var current_mission_team = [];
+	var chat_messages = [];
+	
+	var players = {};
+	
+	var resistance_key = "dgrokpx7xpqfr";
+	var disconnect_sym = "💔";
+	var connections = {};
+	var order_childen = {};
+	
+	// room_key is the peer id of the first player
+	var room_key = window.location.hash.slice(1);
+	var local_peer = new Peer({key: resistance_key});
+	
+	
+	//player_data[name] = {};
+	//player_order[next_player].send(msg);
+	//broadcast(msg);
+	
+	function send(conn, msg) {
+		console.log('\u25C0\u2015', msg);
+		conn.send(msg);
+	}
+	
+	function broadcast(msg) {
+		d3.values(connections).forEach(function(conn) {
+			send(conn, msg);
+		})
+	}
+	
+	function handle_messages(conn) {
+		return function(data) {
+			console.log('\u2015\u25B6', data);
+			
+			switch(data.type) {
+				case "player":
+					var name = data.name;
+					if(player_order.filter(function(d) { return d === name; }).length === 0) {
+						if(!connections[data.id] && data.id !== local_peer.id) {
+							console.log('connecting to other player', name, data.id);
+							var connection = local_peer.connect(data.id, {metadata:local_name});
+							console.log(connection);
+							if(connection) {
+								handle_connection(data.id, connection);
+							}
+						}
+						players[name] = {"x":0, "y":0, "name":name, "ready":false, "order":player_order.length, "id":data.id};
+						conn.name = name;
+					}
+					if(!order_childen[conn.name]) {
+						players[name].order = data.order;
+					}
+					update_players();
+					break;
+				case "whom":
+					player_order.forEach(function(e) {
+						send(conn, {'type':'player', 'name':e, 'order': players[e].order,
+							'id': players[e] === local_player ? local_peer.id : players[e].id});
+					});
+					break;
+				case "chat":
+					chat_messages.push({'from': conn.name, 'msg': data.msg});
+					update_chat();
+					break;
+				case "deal":
+					break;
+				case "vote_team":
+					break;
+				case "vote_mission":
+					break;
+				case "ready":
+					players[conn.name].ready = data.ready;
+					break;
+			}
+		}
+	}
+	
+	/*
+		sets:
+		
+	*/
+	function handle_connection(id, conn) {
+		console.log('connection', conn);
+		
+		connections[id] = conn;
+		conn.on('data', handle_messages(conn));
+		
+		setTimeout(function() {
+			send(conn, {type:'whom'});
+			send(conn, {type:'heartbeat'});
+		}, 500);
+	}
+	
+	
+	local_peer.on('open', function handle_open(id) {
+		local_player.conn = local_peer;
+		
+		local_peer.on('connection', function(connection) {
+			// receiving a new connection from outside the group
+			var name = connection.metadata;
+			console.log('new child conn from', name);
+			handle_connection(connection.peer, connection);
+			order_childen[name] = true;
+			connection.name = name;
+			players[name] = {"x":0, "y":0, "name":name, "ready":false, "order":player_order.length, "id":connection.peer};
+			update_players();
+			console.log('added new player');
+		});
+		
+		local_peer.on('close', function() {
+			
+		});
+		
+		local_peer.on('disconnected', function() {
+			local_peer.reconnect();
+		});
+		
+	});
+	
+	
+	function enter_name() {
+		var status = d3.select("#game_status").text("");
+		status.append("div").text("Name: ");
+		var name_div = status.append("div").attr("contenteditable", true).style("min-width", "100px");
+		
+		var finished = function() {
+			local_name = name_div.text();
+			local_player.name = local_name;
+			players[local_player.name] = local_player;
+			update_players();
+			status.selectAll("*").remove();
+			advance_game_state();
+		};
+		
+		name_div.on('keypress', function() {
+				if(d3.event.keyCode === 13) {
+					d3.event.preventDefault();
+					d3.event.stopPropagation();
+					finished();
+				}
+			});
+		status.append("div").text("👍").classed({"submit-btn": true})
+			.on('click', finished);
+	}
+	
+	function init_conn() {
+		if(room_key === "") {
+			update_status("Give players this link to join: " + window.location + "#" + local_peer.id);
+		} else {
+			console.log('attempting connection', room_key);
+			var connection = local_peer.connect(room_key, {metadata:local_name});
+			console.log(connection);
+			if(connection) {
+				handle_connection(connection.peer, connection);
+			}
+		}
+	}
+		
+	function game_setup() {
+		
+	}
+	
+	function play_game() {
+		
+	}
+	
+	function game_end() {
+		
+	}
+	
+	var current_phase_index = 0;
+	function advance_game_state() {
+		var current_phase = game_order[current_phase_index];
+		current_phase();
+		current_phase_index += 1;
+	}
+	
+	advance_game_state();
+	
+	function turn_engine() {
+		var current_phase = turn_phases["leader_select_team"];
+	}
+	
+	
+	function rectContains(r, x, y) {
+		return x > r.left && x < r.right &&
+				y > r.top && y < r.bottom;
+	}
+	
+	var drag = d3.behavior.drag();
+	drag.on("dragstart", function(d) {
+			d3.select(this).classed({"dragging": true});
+            d3.event.sourceEvent.stopPropagation();
+		})
+		.on("dragend", function(d) {
+			var name = d.name;
+			if(rectContains(d3.select('#mission_list').node().getBoundingClientRect(), d3.event.sourceEvent.clientX, d3.event.sourceEvent.clientY)) {
+				if(d3.selectAll('.active_team div').filter(function(d) { return d.name === name}).size() < 1) {
+					d3.select('.active_team').append("div").classed({player:true, name:true})
+						.datum({"x": 0, "y": 0, "name": d.name })
+						.style("transform", "translate(0, 0)")
+						.text(d.name).call(drag);
+				}
+			} else {
+				d3.select('.active_team > .dragging').remove();
+			}
+			
+			d3.select(this).classed({"dragging": false});
+			d.x = 0;
+			d.y = 0;
+	        d3.select(this).style("transform", "translate(" + 0 + "px," + 0 + "px)");
+		})
+    	.on("drag", function(d,i) {
+	        d.x += d3.event.dx;
+	        d.y += d3.event.dy;
+	        d3.select(this).style("transform", "translate(" + d.x + "px," + d.y + "px)");
+	    });
+	d3.selectAll('.player')
+		.datum(function() { return {"x": 0, "y": 0, "name": d3.select(this).text()}; })
+		.style("transform", "translate(0, 0)")
+		.call(drag);
+		
+	d3.select('.message_input').on('keypress', function() {
+		if(d3.event.keyCode === 13) {
+			d3.event.preventDefault();
+			d3.event.stopPropagation();
+	
+			var msg = d3.select(this).text();
+			chat_messages.push({'from': local_name, 'msg': msg});
+			update_chat();
+			broadcast({'type':'chat', 'msg':msg});
+			d3.select(this).text("");
+		}
+	});
+	
+	function leader_select_team() {
+		if(local_player_is_leader()) {
+			update_status("You are the Leader! Select a team.");
+		} else {
+			update_status("The Leader is now selecting a team.");
+		}
+		
+		//wait_for_all_team_members_chosen();
+	}
+	
+	function players_vote_team() {
+		update_status("Vote to decide whether this team should go on the mission.");
+		//display_vote_team();
+	}
+	
+	function players_vote_mission() {
+		if(current_mission_team.some(function(t){ return t === local_player; })) {
+			update_status("The mission is go! Do you want to pass or fail the mission?");
+			//display_vote_mission();
+		} else {
+			update_status("Mission team is current on the mission.");
+			//display_team_making_decision();
+		}
+	}
+	
+	function mission_pass() {
+		succeeded_missions += 1;
+		update_status("The mission was a success!");
+		//display_mission_pass();
+		check_win_conditions();
+	}
+	
+	function mission_fail() {
+		failed_missions += 1;
+		update_status("The mission failed! A spy is in the ranks!");
+		//display_mission_fail();
+		check_win_conditions();
+	}
+	
+	function check_win_conditions() {
+		if(succeeded_missions == 3) {
+			team_wins = 1;
+			return true;
+		}
+		if(failed_missions == 3) {
+			team_wins = 2;
+			return true;
+		}
+		if(failed_votes == 5) {
+			team_wins = 2;
+			return true;
+		}
+		return false;
+	}
+	
+	function switch_mission() {
+		current_mission += 1;
+		// broadcast current mission assumption
+	}
+	
+	function switch_leader() {
+		current_leader = current_leader + 1 % num_players;
+		// broadcast current leader assumption
+	}
+	
+	function local_player_is_leader() {
+		return player_order[current_leader] === local_player.name;
+	}
+	
+	function update_players() {
+		var sorter = function(a, b) { return a.order - b.order; };
+		var sorted = d3.values(players)
+			.sort(sorter);
+		player_order = sorted.map(function(e) { return e.name; });
+		
+		var ps = d3.select('#players').selectAll('div')
+			.data(sorted);
+		ps.enter()
+			.insert("div").classed({player:true, name:true})
+			.style("transform", "translate(0, 0)").call(drag);
+		ps.exit()
+			.remove();
+		ps.text(function(d) { return d.name; })
+	}
+	
+	function update_status(text) {
+		d3.select("#game_status").text(text);
+	}
+	
+	function update_chat() {
+		if(chat_messages.length > 10) {
+			chat_messages.shift();
+		}
+		var massages = d3.select('#messages').selectAll('.message')
+			.data(chat_messages);
+		massages.enter()
+			.append('span').classed({'message':true})
+			.html(function(d) {
+				return '<span class="name">'+d.from+'</span>: '+d.msg;
+			});
+		massages.exit().remove();
+	}
+	
+	
+	// init
+	
+	
+	
+	/*
+	
+	team distribution protocol
+	
+	team secrets
+	public channel for communication opens for evil, then closes
+	
+	first player encrypts all cards
+	sends all cards to seconds player
+	second player encrypts all cards, passes to third ...
+	first player has all cards encrypted by all players
+	first player broadcasts a picked card
+	first player passes card around to each player one by one and decrypts all but own key
+	first player secretly decrypts card and knows which card they chose
+	
+	second player now has four cards encrypted by all players to choose from ...
+	
+	team votes
+	encrypt vote with new key, broadcast encrypted vote, broadcast key to reveal vote
+	
+	mission votes
+	first player encrypts vote, passes to next player, who also encrypts it ...
+	all voting players reveal their keys
+	all players can decrypt but don't know who voted what
+	
+	*/
+	
+</script>
+</body>
+</html>
