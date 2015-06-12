@@ -4,6 +4,10 @@
 	<link href='http://fonts.googleapis.com/css?family=Orbitron:400,700' rel='stylesheet' type='text/css'>
 	<script src="http://cdn.peerjs.com/0.3/peer.js"></script>
 	<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+	<script src="http://crypto-js.googlecode.com/svn/tags/3.1.2/build/rollups/sha256.js"></script>
+	<script src="http://crypto-js.googlecode.com/svn/tags/3.1.2/build/rollups/aes.js"></script>
+	<script src="http://crypto-js.googlecode.com/svn/tags/3.1.2/build/components/mode-ctr-min.js"></script>
+	<script src="http://crypto-js.googlecode.com/svn/tags/3.1.2/build/components/pad-nopadding.js"></script>
 	<style type="text/css">
 	
 	body {
@@ -83,16 +87,6 @@
 		box-shadow: 4px 4px;
 	}
 	
-	.player {
-		margin: 5px;
-		display: inline-block;
-	    cursor: move;
-	    cursor: grab;
-	    cursor: -moz-grab;
-	    cursor: -webkit-grab;
-		z-index: 0;
-	}
-	
 	.dragging {
 		position: absolute;
 	    cursor: grabbing;
@@ -143,6 +137,13 @@
 	.name {
 		font-weight: bold;
 		white-space: nowrap;
+		margin: 5px;
+		display: inline-block;
+	    cursor: move;
+	    cursor: grab;
+	    cursor: -moz-grab;
+	    cursor: -webkit-grab;
+		z-index: 0;
 	}
 	
 	#reminder_area {
@@ -160,11 +161,29 @@
 		cursor: pointer;
 		border: solid 2px black;
 		border-radius: 6px;
+		-webkit-touch-callout: none;
+	    -webkit-user-select: none;
+	    -khtml-user-select: none;
+	    -moz-user-select: none;
+	    -ms-user-select: none;
+	    user-select: none;
 	}
 	
-	.active_team {
-		min-width: 100px;
+	.ready-btn {
+		cursor: pointer;
+		min-width: 110px;
+		padding: 2px;
+		border: solid 2px black;
+		border-radius: 6px;
+		background-color: #E74C3C;
+		-webkit-touch-callout: none;
+	    -webkit-user-select: none;
+	    -khtml-user-select: none;
+	    -moz-user-select: none;
+	    -ms-user-select: none;
+	    user-select: none;
 	}
+	
 	</style>
 </head>
 <body>
@@ -178,33 +197,31 @@
 		<section id="mission_list">
 			<div class="mission">
 				<svg width="150px" height="150px" viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg">
-					<circle cx="60" cy="60" r="50" fill="#3498DB"/>
+					<circle cx="60" cy="60" r="50" fill="#000"/>
 					<text x="60" y="88" font-size="75" text-anchor="middle" fill="#ECF0F1">2</text>
 				</svg>
 			</div>
 			<div class="mission">
 				<svg width="150px" height="150px" viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg">
-					<circle cx="60" cy="60" r="50" fill="#E74C3C"/>
+					<circle cx="60" cy="60" r="50" fill="#000"/>
 					<text x="60" y="88" font-size="75" text-anchor="middle" fill="#ECF0F1">3</text>
 				</svg>
 			</div>
-			<div class="mission active_mission">
+			<div class="mission">
 				<svg width="150px" height="150px" viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg">
-					<circle cx="60" cy="60" r="50"/>
+					<circle cx="60" cy="60" r="50" fill="#000"/>
 					<text x="60" y="88" font-size="75" text-anchor="middle" fill="#ECF0F1">2</text>
 				</svg>
-				<div class="active_team">
-				</div>
 			</div>
 			<div class="mission">
 				<svg width="150px" height="150px" viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg">
-					<circle cx="60" cy="60" r="50"/>
+					<circle cx="60" cy="60" r="50" fill="#000"/>
 					<text x="60" y="88" font-size="75" text-anchor="middle" fill="#ECF0F1">3</text>
 				</svg>
 			</div>
 			<div class="mission">
 				<svg width="150px" height="150px" viewBox="0 0 120 120" version="1.1" xmlns="http://www.w3.org/2000/svg">
-					<circle cx="60" cy="60" r="50"/>
+					<circle cx="60" cy="60" r="50" fill="#000"/>
 					<text x="60" y="88" font-size="75" text-anchor="middle" fill="#ECF0F1">3</text>
 				</svg>
 			</div>
@@ -238,15 +255,16 @@
 	</section>
 	
 <script>
-	var d3 = d3;
+	var d3 = d3, CryptoJS = CryptoJS, Peer = Peer;
 	var yes = "👍";
 	var no = "👎";
-	var num_players = 5;
-	var current_mission = 0;
-	var current_leader = 0;
+	var star = "★";
+	var current_mission = -1;
+	var current_leader = -1;
 	var succeeded_missions = 0;
 	var failed_missions = 0;
-	var failed_votes = 0
+	var failed_votes = 0;
+	var last_mission_success = false;
 	var team_wins = 0;
 	
 	var teams = {
@@ -275,6 +293,9 @@
 	var good_team_sym = "👊";
 	var bad_team_name = "Spies";
 	var bad_team_sym = "🎭";
+	
+	var good_win_color = "#3498DB";
+	var evil_win_color = "#E74C3C";
 	
 	var game_order = [
 		enter_name, // textbox
@@ -316,13 +337,17 @@
 		}
 	};
 	
-	var local_name = "Objelisks" + Math.floor(Math.random()*50);
-	var local_player = {"x":0, "y":0, "name":local_name, "ready":false, "order":0, "conn":null};
+	var local_name = "Ether";
+	var local_player = {"x":0, "y":0, "name":local_name, "ready":false, "order":0, "id":0};
 	var player_order = [];
+	var player_count = 0;
+	var next_player;
 	var current_mission_team = [];
 	var chat_messages = [];
+	var chat_counter = 1;
 	
 	var players = {};
+	var signatures = {};
 	
 	var resistance_key = "dgrokpx7xpqfr";
 	var disconnect_sym = "💔";
@@ -333,6 +358,9 @@
 	var room_key = window.location.hash.slice(1);
 	var local_peer = new Peer({key: resistance_key});
 	
+	var deck_key;
+	var hand_key;
+	var decrypt_count = 0;
 	
 	//player_data[name] = {};
 	//player_order[next_player].send(msg);
@@ -365,8 +393,8 @@
 								handle_connection(data.id, connection);
 							}
 						}
-						players[name] = {"x":0, "y":0, "name":name, "ready":false, "order":player_order.length, "id":data.id};
-						conn.name = name;
+						connections[data.id].name = name;
+						players[name] = {"x":0, "y":0, "name":name, "ready":data.ready, "order":player_order.length, "id":data.id};
 					}
 					if(!order_childen[conn.name]) {
 						players[name].order = data.order;
@@ -375,15 +403,50 @@
 					break;
 				case "whom":
 					player_order.forEach(function(e) {
-						send(conn, {'type':'player', 'name':e, 'order': players[e].order,
+						send(conn, {'type':'player', 'name':e, 'order': players[e].order, 'ready': players[e].ready,
 							'id': players[e] === local_player ? local_peer.id : players[e].id});
 					});
 					break;
 				case "chat":
-					chat_messages.push({'from': conn.name, 'msg': data.msg});
+					chat_messages.push({'from': conn.name, 'msg': data.msg, 'i': chat_counter++});
 					update_chat();
 					break;
 				case "deal":
+					if(deck_key) {
+						handle_role_draw(data.deck);
+					} else {
+						handle_role_deal(data.deck);
+					}
+					break;
+				case "draw":
+					if(data.deck.length === 0) {
+						broadcast({'type':'drawcomplete'});
+						handle_draw_complete();
+					} else {
+						handle_role_draw(data.deck);
+					}
+					break;
+				case "sign":
+					if(!signatures[data.action]) {
+						signatures[data.action] = [];
+					}
+					signatures[data.action].push(conn.peer);
+					break;
+				case "drawcomplete":
+					handle_draw_complete();
+					break;
+				case "decrypt":
+					send(conn, {'type':'decrypted', 'thing':decrypt(data.thing, deck_key)});
+					break;
+				case "decrypted":
+					my_role = data.thing;
+					decrypt_count += 1;
+					if(decrypt_count === player_count-1) {
+						handle_reveal();
+					} else {
+						var id = signatures['deal'][decrypt_count];
+						send(connections[id], {'type':'decrypt', 'thing':my_role});
+					}
 					break;
 				case "vote_team":
 					break;
@@ -391,6 +454,8 @@
 					break;
 				case "ready":
 					players[conn.name].ready = data.ready;
+					update_players();
+					check_game_start_conditions();
 					break;
 			}
 		}
@@ -414,7 +479,7 @@
 	
 	
 	local_peer.on('open', function handle_open(id) {
-		local_player.conn = local_peer;
+		local_player.id = id;
 		
 		local_peer.on('connection', function(connection) {
 			// receiving a new connection from outside the group
@@ -435,7 +500,6 @@
 		local_peer.on('disconnected', function() {
 			local_peer.reconnect();
 		});
-		
 	});
 	
 	
@@ -468,6 +532,7 @@
 		if(room_key === "") {
 			update_status("Give players this link to join: " + window.location + "#" + local_peer.id);
 		} else {
+			update_status("Connected! Waiting for enough players to join and ready up.");
 			console.log('attempting connection', room_key);
 			var connection = local_peer.connect(room_key, {metadata:local_name});
 			console.log(connection);
@@ -475,14 +540,21 @@
 				handle_connection(connection.peer, connection);
 			}
 		}
-	}
 		
-	function game_setup() {
-		
+		d3.select('#game_status').append('div').text('ready').classed({'ready-btn':true}).on('click', function(){
+			local_player.ready = !local_player.ready;
+			d3.select(this).style('background-color', local_player.ready ? good_win_color : evil_win_color);
+			broadcast({'type':'ready', 'ready': local_player.ready});
+			update_players();
+			check_game_start_conditions();
+		});
 	}
 	
 	function play_game() {
-		
+		console.log("play ball");
+		switch_mission();
+		switch_leader();
+		update_players();
 	}
 	
 	function game_end() {
@@ -496,6 +568,7 @@
 		current_phase_index += 1;
 	}
 	
+	// main entry
 	advance_game_state();
 	
 	function turn_engine() {
@@ -516,8 +589,8 @@
 		.on("dragend", function(d) {
 			var name = d.name;
 			if(rectContains(d3.select('#mission_list').node().getBoundingClientRect(), d3.event.sourceEvent.clientX, d3.event.sourceEvent.clientY)) {
-				if(d3.selectAll('.active_team div').filter(function(d) { return d.name === name}).size() < 1) {
-					d3.select('.active_team').append("div").classed({player:true, name:true})
+				if(d3.selectAll('.active_team .name').filter(function(d) { return d.name === name}).size() < 1) {
+					d3.select('.active_team').append("div").classed({name:true})
 						.datum({"x": 0, "y": 0, "name": d.name })
 						.style("transform", "translate(0, 0)")
 						.text(d.name).call(drag);
@@ -536,7 +609,7 @@
 	        d.y += d3.event.dy;
 	        d3.select(this).style("transform", "translate(" + d.x + "px," + d.y + "px)");
 	    });
-	d3.selectAll('.player')
+	d3.selectAll('.name')
 		.datum(function() { return {"x": 0, "y": 0, "name": d3.select(this).text()}; })
 		.style("transform", "translate(0, 0)")
 		.call(drag);
@@ -547,7 +620,7 @@
 			d3.event.stopPropagation();
 	
 			var msg = d3.select(this).text();
-			chat_messages.push({'from': local_name, 'msg': msg});
+			chat_messages.push({'from': local_name, 'msg': msg, 'i': chat_counter++});
 			update_chat();
 			broadcast({'type':'chat', 'msg':msg});
 			d3.select(this).text("");
@@ -570,7 +643,7 @@
 	}
 	
 	function players_vote_mission() {
-		if(current_mission_team.some(function(t){ return t === local_player; })) {
+		if(current_mission_team.some(function(t) { return t === local_player; })) {
 			update_status("The mission is go! Do you want to pass or fail the mission?");
 			//display_vote_mission();
 		} else {
@@ -580,6 +653,7 @@
 	}
 	
 	function mission_pass() {
+		last_mission_success = true;
 		succeeded_missions += 1;
 		update_status("The mission was a success!");
 		//display_mission_pass();
@@ -587,6 +661,7 @@
 	}
 	
 	function mission_fail() {
+		last_mission_success = false;
 		failed_missions += 1;
 		update_status("The mission failed! A spy is in the ranks!");
 		//display_mission_fail();
@@ -610,20 +685,118 @@
 	}
 	
 	function switch_mission() {
+		console.log("next mission");
 		current_mission += 1;
 		// broadcast current mission assumption
+		var missions = d3.selectAll('.mission');
+		var prev_mission = missions.select(function(d,i) { if(i+1 === current_mission) return this; return null; });
+		if(!prev_mission.empty()) {
+			prev_mission.select('circle').transition().attr('fill', last_mission_success ? good_win_color : evil_win_color);
+			prev_mission.select('.active_team')
+				.transition().style('min-width', '0px').remove();
+		}
+		var mission_div = missions.select(function(d,i) { if(i === current_mission) return this; return null; });
+		mission_div.append("div").classed({"active_team":true}).style('min-width', '0px')
+			.transition().style('min-width', '100px');
 	}
 	
 	function switch_leader() {
-		current_leader = current_leader + 1 % num_players;
+		console.log("next leader");
+		current_leader = (current_leader + 1) % player_count;
 		// broadcast current leader assumption
+		update_players();
 	}
 	
 	function local_player_is_leader() {
 		return player_order[current_leader] === local_player.name;
 	}
 	
+	function game_setup() {
+		update_status("Game starting. Distributing roles...");
+		setTimeout(function() {
+			signatures['deal'] = [];
+			signatures['draw'] = [];
+			if(player_order[0] === local_name) {
+				// generate cards into deck
+				var deck = [];
+				
+				for(var i=0; i<player_count; i++) {
+					deck.push((""+i).repeat(32));
+				}
+				console.log('generated deck', deck);
+				handle_role_deal(deck);
+			}
+		}, 1500);
+	}
+	
+	var my_role = "";
+	function handle_role_deal(deck) {
+		// shuffle cards
+		deck = d3.shuffle(deck);
+		
+		// encrypt all cards
+		deck_key = gen_key();
+		deck = deck.map(function(card) {
+			return encrypt(card, deck_key);
+		});
+		
+		console.log(deck);
+		// add signature
+		broadcast({'type':'sign', 'action':'deal'});
+		
+		// send deck to next player in order
+		send(connections[next_player.id], {'type':'deal', 'deck':deck});
+	}
+	
+	function handle_role_draw(deck) {
+		// shuffle cards
+		deck = d3.shuffle(deck);
+	
+		// if cards in deck take one
+		my_role = deck.pop();
+		// broadcast card taken
+		broadcast({'type':'sign', 'action':'draw', 'card':my_role});
+		
+		send(connections[next_player.id], {'type':'draw', 'deck':deck});
+	}
+	
+	function handle_draw_complete() {
+		decrypt_count = 0;
+		var id = signatures['deal'][decrypt_count];
+		send(connections[id], {'type':'decrypt', 'thing':my_role});
+	}
+	
+	function handle_reveal() {
+		my_role = decrypt(my_role, deck_key);
+		var roles = [];
+		for(var i=0; i<teams[player_count][0]; i++) {
+			roles.push("RESISTANCE");
+		}
+		for(var i=0; i<teams[player_count][1]; i++) {
+			roles.push("SPY");
+		}
+		my_role = roles[parseInt(my_role.charAt(0))];
+		console.log('local player is', my_role);
+		update_status("You are " + my_role + ". Don't tell anybody.");
+		setTimeout(advance_game_state, 2000);
+	}
+	
+	function check_game_start_conditions() {
+		var readiedUp = d3.values(players).every(function(e) {
+			return e.ready;
+		});
+		
+		if(readiedUp && player_order.length >= 5) {
+			player_count = player_order.length;
+			console.log('local player is ', player_order.indexOf(local_name));
+			next_player = players[player_order[(player_order.indexOf(local_name)+1) % player_order.length]];
+			console.log('player to right is ', next_player);
+			advance_game_state();
+		}
+	}
+	
 	function update_players() {
+		// update players box
 		var sorter = function(a, b) { return a.order - b.order; };
 		var sorted = d3.values(players)
 			.sort(sorter);
@@ -636,7 +809,28 @@
 			.style("transform", "translate(0, 0)").call(drag);
 		ps.exit()
 			.remove();
-		ps.text(function(d) { return d.name; })
+		
+		ps.text(function(d, i) {
+			var emoji = "";
+			if(current_phase_index < 3) {
+				emoji += (d.ready ? yes : no);
+			}
+			if(i === current_leader) {
+				emoji += star;
+			}
+			var appendage = "";
+			if(d.name === local_name) {
+				appendage += (my_role ? " (" + my_role + ")" : "");
+			}
+			return emoji + d.name + appendage;
+		});
+		
+		// update mission team count
+		if(player_order.length >= 5) {
+			d3.selectAll('.mission').select('text').text(function(d, i) {
+				return team_size[player_order.length][i];
+			});
+		}
 	}
 	
 	function update_status(text) {
@@ -648,7 +842,7 @@
 			chat_messages.shift();
 		}
 		var massages = d3.select('#messages').selectAll('.message')
-			.data(chat_messages);
+			.data(chat_messages, function(d) { return d.i; });
 		massages.enter()
 			.append('span').classed({'message':true})
 			.html(function(d) {
@@ -657,9 +851,36 @@
 		massages.exit().remove();
 	}
 	
-	
 	// init
 	
+	
+	// todo: randomize the iv?
+	var settings = { iv: CryptoJS.enc.Hex.parse('2301cd4ef785690a1b2c3dab00000000'), mode: CryptoJS.mode.CTR, padding: CryptoJS.pad.NoPadding };
+	
+	function gen_key() {
+		var key = Math.random().toString(32);
+		return CryptoJS.enc.Base64.stringify(CryptoJS.SHA256(key));
+	}
+	
+	function base64(msg) {
+		return CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(msg));
+	}
+
+	// var phrase = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(msg));
+	
+	// msg and key should be in base 64
+	function encrypt(msg, key) {
+		var w64 = CryptoJS.enc.Base64.parse(msg);
+		var k64 = CryptoJS.enc.Base64.parse(key);
+		return CryptoJS.enc.Base64.stringify(CryptoJS.AES.encrypt(w64, k64, settings).ciphertext);
+	}
+	
+	// msg and key should be in base 64
+	function decrypt(msg, key) {
+		var k64 = CryptoJS.enc.Base64.parse(key);
+		return CryptoJS.enc.Base64.stringify(CryptoJS.AES.decrypt(msg, k64, settings));
+	}
+	// var decrypted = CryptoJS.enc.Utf8.stringify(CryptoJS.enc.Base64.parse(msg));
 	
 	
 	/*
@@ -676,6 +897,21 @@
 	first player broadcasts a picked card
 	first player passes card around to each player one by one and decrypts all but own key
 	first player secretly decrypts card and knows which card they chose
+	
+	
+	// generate cards into deck
+	// encrypt all cards
+	// add signature to deck
+	// send deck to next player in order
+	// receive deck
+	// jro -4
+	// if all signatures present
+	// if cards in deck take one
+	// broadcast card taken
+	// pass on deck
+	// if no cards
+	// send message roles complete
+	// next state
 	
 	second player now has four cards encrypted by all players to choose from ...
 	
