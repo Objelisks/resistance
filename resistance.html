@@ -157,25 +157,24 @@
 		margin: 6px;
 	}
 	
-	.submit-btn {
-		cursor: pointer;
-		border: solid 2px black;
-		border-radius: 6px;
-		-webkit-touch-callout: none;
-	    -webkit-user-select: none;
-	    -khtml-user-select: none;
-	    -moz-user-select: none;
-	    -ms-user-select: none;
-	    user-select: none;
-	}
-	
 	.ready-btn {
-		cursor: pointer;
 		min-width: 110px;
 		padding: 2px;
+		background-color: #E74C3C;
+	}
+	
+	.accept-btn:hover {
+		background-color: #3498DB;
+	}
+	
+	.reject-btn:hover {
+		background-color: #E74C3C;
+	}
+	
+	.button {
+		cursor: pointer;
 		border: solid 2px black;
 		border-radius: 6px;
-		background-color: #E74C3C;
 		-webkit-touch-callout: none;
 	    -webkit-user-select: none;
 	    -khtml-user-select: none;
@@ -301,10 +300,10 @@
 		enter_name, // textbox
 		init_conn, // lobby, ready up, min five
 		game_setup, // you are this player, these are your team mates, initialize variables, choose starting player
-		play_game, // loop turns until win condition
+		new_round, // loop turns until win condition
 		game_end // display winners
 	];
-	var turn_phases = {
+	/*var turn_phases = {
 		"leader_select_team": {
 			func: leader_select_team,
 			next: "players_vote_team"
@@ -335,7 +334,7 @@
 			func: switch_leader,
 			next: "leader_select_team"
 		}
-	};
+	};*/
 	
 	var local_name = "Ether";
 	var local_player = {"x":0, "y":0, "name":local_name, "ready":false, "order":0, "id":0};
@@ -349,18 +348,20 @@
 	var players = {};
 	var signatures = {};
 	
-	var resistance_key = "dgrokpx7xpqfr";
 	var disconnect_sym = "💔";
 	var connections = {};
 	var order_childen = {};
 	
 	// room_key is the peer id of the first player
 	var room_key = window.location.hash.slice(1);
-	var local_peer = new Peer({key: resistance_key});
+	var local_peer = new Peer({key: "dgrokpx7xpqfr"});
 	
 	var deck_key;
-	var hand_key;
 	var decrypt_count = 0;
+	var team_keys = {};
+	
+	var mission_encrypted = {};
+	var mission_vote_key;
 	
 	//player_data[name] = {};
 	//player_order[next_player].send(msg);
@@ -373,7 +374,9 @@
 	
 	function broadcast(msg) {
 		d3.values(connections).forEach(function(conn) {
-			send(conn, msg);
+			if(conn.send) {
+				send(conn, msg);
+			}
 		})
 	}
 	
@@ -402,9 +405,10 @@
 					update_players();
 					break;
 				case "whom":
-					player_order.forEach(function(e) {
-						send(conn, {'type':'player', 'name':e, 'order': players[e].order, 'ready': players[e].ready,
-							'id': players[e] === local_player ? local_peer.id : players[e].id});
+					console.log(player_order, players);
+					player_order.forEach(function(name) {
+						send(conn, {'type':'player', 'name':name, 'order': players[name].order, 'ready': players[name].ready,
+							'id': players[name] === local_player ? local_peer.id : players[name].id});
 					});
 					break;
 				case "chat":
@@ -435,22 +439,56 @@
 				case "drawcomplete":
 					handle_draw_complete();
 					break;
-				case "decrypt":
-					send(conn, {'type':'decrypted', 'thing':decrypt(data.thing, deck_key)});
+				case "decrypt_role":
+					// unsafe
+					send(conn, {'type':'decrypted_role', 'thing':decrypt(data.thing, deck_key)});
 					break;
-				case "decrypted":
+				case "decrypted_role":
 					my_role = data.thing;
 					decrypt_count += 1;
 					if(decrypt_count === player_count-1) {
 						handle_reveal();
 					} else {
 						var id = signatures['deal'][decrypt_count];
-						send(connections[id], {'type':'decrypt', 'thing':my_role});
+						send(connections[id], {'type':'decrypt_role', 'thing':my_role});
+					}
+					break;
+				case "team_update":
+					if(conn.peer === players[player_order[current_leader]].id) {
+						update_team(data.team);
+					}
+					break;
+				case "team_select":
+					if(conn.peer === players[player_order[current_leader]].id) {
+						update_team(data.team);
+						handle_team_selection(data.team);
 					}
 					break;
 				case "vote_team":
+					team_votes[conn.peer] = data.vote;
+					if(d3.keys(team_votes).length === player_count) {
+						broadcast({'type':'team_key', 'key':team_vote_key});
+					}
+					break;
+				case "team_key":
+					team_keys[conn.peer] = data.key;
+					if(d3.keys(team_keys).length === player_count) {
+						handle_vote_finish();
+					}
 					break;
 				case "vote_mission":
+					if(!mission_encrypted[data.id]) {
+						var encrypted = encrypt(data.vote, mission_vote_key);
+						mission_encrypted[data.id] = true;
+						send(connections[next_player.id], {'type':'vote_mission', 'id':data.id, 'vote':encrypted});
+					} else {
+						send(connections[players[player_order[current_leader]]].id, {'type':'encrypted_mission_vote', 'vote':data.vote});
+					}
+					break;
+				case "encrypted_mission_vote":
+					if(local_player_is_leader()) {
+						
+					}
 					break;
 				case "ready":
 					players[conn.name].ready = data.ready;
@@ -461,25 +499,21 @@
 		}
 	}
 	
-	/*
-		sets:
-		
-	*/
 	function handle_connection(id, conn) {
 		console.log('connection', conn);
 		
 		connections[id] = conn;
 		conn.on('data', handle_messages(conn));
 		
-		setTimeout(function() {
+		conn.on('open', function() {
 			send(conn, {type:'whom'});
-			send(conn, {type:'heartbeat'});
-		}, 500);
+		});
 	}
 	
 	
 	local_peer.on('open', function handle_open(id) {
 		local_player.id = id;
+		connections[id] = local_peer;
 		
 		local_peer.on('connection', function(connection) {
 			// receiving a new connection from outside the group
@@ -494,10 +528,11 @@
 		});
 		
 		local_peer.on('close', function() {
-			
+			console.log('connection close');
 		});
 		
 		local_peer.on('disconnected', function() {
+			console.log('disconnect, attempting reconnect');
 			local_peer.reconnect();
 		});
 	});
@@ -511,9 +546,9 @@
 		var finished = function() {
 			local_name = name_div.text();
 			local_player.name = local_name;
+			local_peer.name = local_name;
 			players[local_player.name] = local_player;
 			update_players();
-			status.selectAll("*").remove();
 			advance_game_state();
 		};
 		
@@ -524,7 +559,7 @@
 					finished();
 				}
 			});
-		status.append("div").text("👍").classed({"submit-btn": true})
+		status.append("div").text("👍").classed({"submit-btn": true, 'button':true})
 			.on('click', finished);
 	}
 	
@@ -541,7 +576,7 @@
 			}
 		}
 		
-		d3.select('#game_status').append('div').text('ready').classed({'ready-btn':true}).on('click', function(){
+		d3.select('#game_status').append('div').text('ready').classed({'ready-btn':true, 'button':true}).on('click', function(){
 			local_player.ready = !local_player.ready;
 			d3.select(this).style('background-color', local_player.ready ? good_win_color : evil_win_color);
 			broadcast({'type':'ready', 'ready': local_player.ready});
@@ -550,11 +585,82 @@
 		});
 	}
 	
-	function play_game() {
+	function new_round() {
 		console.log("play ball");
-		switch_mission();
-		switch_leader();
+		team_votes = {};
+		team_keys = {};
 		update_players();
+		if(local_player_is_leader()) {
+			update_status("You are the leader. Choose a team and press ready.");
+			
+			d3.select('#game_status').append('div').text('finish').classed({'team-btn':true, 'button':true}).on('click', function(){
+				var selectedTeam = d3.selectAll('.active_team > div')[0].map(function(d) { return d3.select(this).text(); });
+				broadcast({'type':'team_select', 'team': selectedTeam});
+				handle_team_selection(selectedTeam);
+			});
+		} else {
+			update_status("The Leader is choosing a team. Wait for them to finish.");
+		}
+	}
+	
+	var team_vote_key;
+	var team_votes = {};
+	function handle_team_selection(team) {
+		update_status("Choose whether to accept or reject this team. Your vote is secret until all players have voted.");
+		
+		function vote_click(choice) {
+			return function() {
+				var selectedTeam = d3.select('.active_team').selectAll('div')[0].map(function(d) { return d3.select(this).text(); });
+				team_vote_key = gen_key();
+				
+				var encrypted_vote = encrypt(base64(choice), team_vote_key);
+				team_votes[local_peer.id] = encrypted_vote;
+				team_keys[local_peer.id] = team_vote_key;
+				broadcast({'type':'vote_team', 'vote': encrypted_vote});
+				
+				if(d3.keys(team_votes).length === player_count) {
+					broadcast({'type':'team_key', 'key':team_vote_key});
+				}
+				
+				update_status("You voted to " + choice + ". Waiting for other players to vote...");
+			}
+		}
+		
+		var acceptBtn = d3.select('#game_status').append('div').text('accept').classed({'accept-btn':true, 'button':true})
+			.on('click', vote_click("accept"));
+		var rejectBtn = d3.select('#game_status').append('div').text('reject').classed({'reject-btn':true, 'button':true})
+			.on('click', vote_click("reject"));
+	}
+	
+	function handle_vote_finish() {
+		var decrypted_votes = d3.keys(team_votes).map(function(id) {
+			return {
+				'id': id,
+				'vote': CryptoJS.enc.Utf8.stringify(CryptoJS.enc.Base64.parse(decrypt(team_votes[id], team_keys[id])))
+			};
+		});
+		
+		var accept_count = 0;
+		decrypted_votes.forEach(function(vote_obj) {
+			var vote = vote_obj.vote;
+			accept_count += (vote === "accept" ? 1 : 0);
+			players[connections[vote_obj.id].name].team_vote = vote;
+			update_players();
+		});
+		
+		if(accept_count > Math.floor(player_count / 2)) {
+			update_status("Vote succeeded! The team is going on the mission.");
+			setTimeout(function() {
+				players_vote_mission();
+			}, 2000);
+		} else {
+			update_status("Vote failed! The team is not going on the mission.");
+			setTimeout(function() {
+				//check_game_lose_conditions();
+				switch_leader();
+				new_round();
+			}, 2000);
+		}
 	}
 	
 	function game_end() {
@@ -571,10 +677,6 @@
 	// main entry
 	advance_game_state();
 	
-	function turn_engine() {
-		var current_phase = turn_phases["leader_select_team"];
-	}
-	
 	
 	function rectContains(r, x, y) {
 		return x > r.left && x < r.right &&
@@ -589,14 +691,18 @@
 		.on("dragend", function(d) {
 			var name = d.name;
 			if(rectContains(d3.select('#mission_list').node().getBoundingClientRect(), d3.event.sourceEvent.clientX, d3.event.sourceEvent.clientY)) {
-				if(d3.selectAll('.active_team .name').filter(function(d) { return d.name === name}).size() < 1) {
-					d3.select('.active_team').append("div").classed({name:true})
-						.datum({"x": 0, "y": 0, "name": d.name })
-						.style("transform", "translate(0, 0)")
-						.text(d.name).call(drag);
+				if(d3.select('.active_team').selectAll('div').filter(function(d) { return d.name === name}).size() < 1) {
+					var team = d3.select('.active_team').selectAll('div')[0].map(function(m) { return d3.select(m).text(); });
+					team.push(name);
+					update_team(team);
+					broadcast({'type':'team_update', 'team':team});
 				}
 			} else {
 				d3.select('.active_team > .dragging').remove();
+				var team = d3.select('.active_team').selectAll('div')[0].map(function(m) { return d3.select(m).text(); });
+				team.push(name);
+				update_team(team);
+				broadcast({'type':'team_update', 'team':team});
 			}
 			
 			d3.select(this).classed({"dragging": false});
@@ -627,28 +733,39 @@
 		}
 	});
 	
-	function leader_select_team() {
-		if(local_player_is_leader()) {
-			update_status("You are the Leader! Select a team.");
-		} else {
-			update_status("The Leader is now selecting a team.");
-		}
-		
-		//wait_for_all_team_members_chosen();
-	}
-	
-	function players_vote_team() {
-		update_status("Vote to decide whether this team should go on the mission.");
-		//display_vote_team();
-	}
-	
 	function players_vote_mission() {
 		if(current_mission_team.some(function(t) { return t === local_player; })) {
 			update_status("The mission is go! Do you want to pass or fail the mission?");
-			//display_vote_mission();
+			
+			function vote_click(choice) {
+				return function() {
+					var selectedTeam = d3.select('.active_team').selectAll('div')[0].map(function(d) { return d3.select(this).text(); });
+					team_vote_key = gen_key();
+					
+					var encrypted_vote = encrypt(base64(choice), team_vote_key);
+					team_votes[local_peer.id] = encrypted_vote;
+					team_keys[local_peer.id] = team_vote_key;
+					broadcast({'type':'vote_mission', 'vote': encrypted_vote});
+					
+					if(d3.keys(team_votes).length === player_count) {
+						broadcast({'type':'team_key', 'key':team_vote_key});
+					}
+					
+					var mission_vote_key = gen_key();
+					var encrypted_vote = encrypt(choice, mission_vote_key);
+					
+					send(connections[next_player.id], encrypted_vote);
+					
+					update_status("You voted to " + choice + ". Waiting for other players to vote...");
+				}
+			}
+			
+			var passBtn = d3.select('#game_status').append('div').text('pass').classed({'accept-btn':true, 'button':true})
+				.on('click', vote_click("pass"));
+			var failBtn = d3.select('#game_status').append('div').text('fail').classed({'reject-btn':true, 'button':true})
+				.on('click', vote_click("fail"));
 		} else {
-			update_status("Mission team is current on the mission.");
-			//display_team_making_decision();
+			update_status("Mission team is currently on the mission. Wait for voting to finish.");
 		}
 	}
 	
@@ -656,7 +773,6 @@
 		last_mission_success = true;
 		succeeded_missions += 1;
 		update_status("The mission was a success!");
-		//display_mission_pass();
 		check_win_conditions();
 	}
 	
@@ -664,7 +780,6 @@
 		last_mission_success = false;
 		failed_missions += 1;
 		update_status("The mission failed! A spy is in the ranks!");
-		//display_mission_fail();
 		check_win_conditions();
 	}
 	
@@ -763,11 +878,12 @@
 	function handle_draw_complete() {
 		decrypt_count = 0;
 		var id = signatures['deal'][decrypt_count];
-		send(connections[id], {'type':'decrypt', 'thing':my_role});
+		send(connections[id], {'type':'decrypt_role', 'thing':my_role});
 	}
 	
 	function handle_reveal() {
 		my_role = decrypt(my_role, deck_key);
+		//my_role = CryptoJS.enc.Utf8.stringify(CryptoJS.enc.Base64.parse(my_role));
 		var roles = [];
 		for(var i=0; i<teams[player_count][0]; i++) {
 			roles.push("RESISTANCE");
@@ -778,7 +894,11 @@
 		my_role = roles[parseInt(my_role.charAt(0))];
 		console.log('local player is', my_role);
 		update_status("You are " + my_role + ". Don't tell anybody.");
-		setTimeout(advance_game_state, 2000);
+		setTimeout(function() {
+			switch_mission();
+			switch_leader();
+			advance_game_state();
+		}, 2000);
 	}
 	
 	function check_game_start_conditions() {
@@ -815,6 +935,9 @@
 			if(current_phase_index < 3) {
 				emoji += (d.ready ? yes : no);
 			}
+			if(d.team_vote) {
+				emoji += (d.team_vote === "accept" ? yes : no);
+			}
 			if(i === current_leader) {
 				emoji += star;
 			}
@@ -849,6 +972,15 @@
 				return '<span class="name">'+d.from+'</span>: '+d.msg;
 			});
 		massages.exit().remove();
+	}
+	
+	function update_team(team) {
+		team = team.map(function(d) { return {"x": 0, "y": 0, "name": d }; });
+		var team_items = d3.select('.active_team').selectAll('div').data(team, function(d) { return d.name; });
+		team_items.enter().append("div").classed({name:true})
+			.style("transform", "translate(0, 0)")
+			.text(function(d) { return d.name; }).call(drag);
+		team_items.exit().remove();
 	}
 	
 	// init
