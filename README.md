@@ -4,7 +4,7 @@
 
 # How to Play:
 
-Use http://objelisks.github.io/resistance/resistance.html or other commonly accessible hosted place.
+Use http://objelisks.github.io/resistance/resistance.html or other commonly accessible hosted place. You'll need at least 5 players total to actually play, and the game supports up to 10. The entire game is contained within the single html file.
 
 Understand the rules, either by owning the original game or watching a youtube playthrough, such as: https://www.youtube.com/watch?v=f5hIPFleQiA
 
