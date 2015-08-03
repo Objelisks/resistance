@@ -12,6 +12,8 @@ The leader should open the page, and then send the link provided to each other p
 
 Rejoining the game after it has started is not currently supported, so if something goes wrong you'll have to restart.
 
+The players will have to agree on some way of letting the spies know who the other spies are, such as a private chat room that only the spies join. The game will not tell the spies who the other spies are.
+
 # Neat Things Include:
 
 * Cryptographically secure card shuffling, dealing, and revealing
