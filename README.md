@@ -2,6 +2,16 @@
 
 ### javascript web based remake of The Resistance
 
+# How to Play:
+
+Use http://objelisks.github.io/resistance/resistance.html or other commonly accessible hosted place.
+
+Understand the rules, either by owning the original game or watching a youtube playthrough, such as: https://www.youtube.com/watch?v=f5hIPFleQiA
+
+The leader should open the page, and then send the link provided to each other player. Each player doesn't need to have the exact same address, as long as the fragment part of the url is the same.
+
+Rejoining the game after it has started is not currently supported, so if something goes wrong you'll have to restart.
+
 # Neat Things Include:
 
 * Cryptographically secure card shuffling, dealing, and revealing
